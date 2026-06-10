@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoPulse | Location-Based Service Architecture</title>
+    
+    <!-- Google Fonts: Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet.js CSS for Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+          
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <span class="pulse-dot"></span>
+                <h1>GeoPulse</h1>
+                <span class="badge">Architecture Playground</span>
+            </div>
+            <p class="subtitle">Interactive simulator for PostGIS spatial queries, lightweight stack integration, and budget-friendly map design.</p>
+        </header>
+
+        <!-- Main Dashboard Layout -->
+        <main class="dashboard-grid">
+            <!-- Sidebar Panel: Control Center -->
+            <aside class="panel control-panel">
+                <div class="panel-section">
+                    <h2><span class="icon">📍</span> Control Center</h2>
+                    <p class="section-desc">Simulate a user query by adjusting the location marker and radius on the map.</p>
+                    
+                    <div class="control-group">
+                        <label for="radius-slider">Search Radius: <span id="radius-val">5.0</span> km</label>
+                        <input type="range" id="radius-slider" min="0.5" max="30.0" step="0.5" value="5.0">
+                    </div>
+
+                    <div class="geo-status">
+                        <div class="coord-display">
+                            <div>Lat: <span id="user-lat">37.77490</span></div>
+                            <div>Lng: <span id="user-lng">-122.41940</span></div>
+                        </div>
+                        <button id="btn-locate" class="btn btn-secondary">
+                            <span class="btn-icon">🎯</span> My Location
+                        </button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <div class="section-header">
+                        <h2><span class="icon">💼</span> Service Providers</h2>
+                        <span id="results-count" class="pill-badge">0 Found</span>
+                    </div>
+                    
+                    <!-- Search input to filter list -->
+                    <div class="search-box">
+                        <input type="text" id="provider-search" placeholder="Filter by name or category...">
+                    </div>
+
+                    <div class="providers-container">
+                        <ul id="providers-list" class="providers-list">
+                            <!-- Injected dynamically -->
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="panel-section creator-section">
+                    <h2><span class="icon">➕</span> Add Custom Provider</h2>
+                    <p class="section-desc">Click anywhere on the map, then fill in details to insert a new row in our simulated PostGIS DB.</p>
+                    <form id="add-provider-form" class="form-add-provider">
+                        <div class="form-row">
+                            <input type="text" id="new-name" placeholder="Name (e.g. Blue Bottle)" required>
+                        </div>
+                        <div class="form-row split">
+                            <select id="new-category" required>
+                                <option value="Food & Drink">🍔 Food & Drink</option>
+                                <option value="Health">🩺 Health & Wellness</option>
+                                <option value="Retail">🛍️ Retail Shop</option>
+                                <option value="Service">🛠️ Repair & Maintenance</option>
+                            </select>
+                            <button type="submit" class="btn btn-primary">Save Provider</button>
+                        </div>
+                        <div class="click-instruction">
+                            <span class="accent-text">* Click the map</span> to set custom latitude/longitude before saving.
+                        </div>
+                    </form>
+                </div>
+            </aside>
+
+            <!-- Center Panel: Map Visualizer -->
+            <section class="panel map-panel">
+                <div class="panel-header">
+                    <h2>Interactive Map Visualizer</h2>
+                    <span class="map-hint">Drag the blue marker to update search center</span>
+                </div>
+                <div id="map" class="map-container"></div>
+            </section>
+
+            <!-- Bottom Panel: Code & Architecture Viewer -->
+            <section class="panel code-panel">
+                <div class="code-header">
+                    <div class="tabs-list">
+                        <button class="tab-btn active" data-tab="sql">1. SQL Schema (PostGIS)</button>
+                        <button class="tab-btn" data-tab="logic">2. DB Filter Logic</button>
+                        <button class="tab-btn" data-tab="stack">3. Supabase Stack Guide</button>
+                        <button class="tab-btn" data-tab="cost">4. Low-Cost Map Guide</button>
+                    </div>
+                </div>
+                <div class="tab-contents">
+                    <!-- SQL Schema Tab -->
+                    <div class="tab-content active" id="tab-sql">
+                        <pre><code><span class="keyword">-- Enable the PostGIS extension (available in Supabase by default)</span>
+<span class="storage">CREATE EXTENSION</span> <span class="keyword">IF NOT EXISTS</span> postgis;
+
+<span class="keyword">-- Create the service providers table with a Geography column</span>
+<span class="storage">CREATE TABLE</span> service_providers (
+    id <span class="type">UUID</span> <span class="storage">PRIMARY KEY DEFAULT</span> gen_random_uuid(),
+    name <span class="type">TEXT</span> <span class="storage">NOT NULL</span>,
+    category <span class="type">TEXT</span> <span class="storage">NOT NULL</span>,
+    description <span class="type">TEXT</span>,
+    <span class="comment">-- geography(Point, 4326) represents points on the WGS 84 ellipsoid (standard GPS coords)</span>
+    location <span class="type">geography(Point, 4326)</span> <span class="storage">NOT NULL</span>,
+    created_at <span class="type">TIMESTAMP WITH TIME ZONE</span> <span class="storage">DEFAULT</span> timezone(<span class="string">'utc'</span>::text, now()) <span class="storage">NOT NULL</span>
+);
+
+<span class="keyword">-- Create a GIST spatial index for high-speed location-based coordinate indexing</span>
+<span class="storage">CREATE INDEX</span> service_providers_location_idx <span class="storage">ON</span> service_providers <span class="storage">USING</span> gist (location);</code></pre>
+                    </div>
+
+                    <!-- DB Filter Logic Tab -->
+                    <div class="tab-content" id="tab-logic">
+                        <pre><code><span class="keyword">-- Create a custom database function (RPC) to calculate range query & distance</span>
+<span class="storage">CREATE OR REPLACE FUNCTION</span> get_providers_within_radius(
+    user_lat <span class="type">DOUBLE PRECISION</span>,
+    user_lng <span class="type">DOUBLE PRECISION</span>,
+    radius_meters <span class="type">DOUBLE PRECISION</span>
+)
+<span class="storage">RETURNS TABLE</span> (
+    id <span class="type">UUID</span>,
+    name <span class="type">TEXT</span>,
+    category <span class="type">TEXT</span>,
+    distance_meters <span class="type">DOUBLE PRECISION</span>
+) 
+<span class="storage">LANGUAGE</span> plpgsql
+<span class="storage">AS</span> <span class="string">$$</span>
+<span class="storage">BEGIN</span>
+    <span class="keyword">RETURN QUERY</span>
+    <span class="storage">SELECT</span> 
+        sp.id,
+        sp.name,
+        sp.category,
+        <span class="comment">-- ST_Distance computes shortest distance in meters on the ellipsoid</span>
+        ST_Distance(sp.location, ST_SetSRID(ST_MakePoint(user_lng, user_lat), 4326)::geography) <span class="storage">AS</span> distance_meters
+    <span class="storage">FROM</span> 
+        service_providers sp
+    <span class="storage">WHERE</span> 
+        <span class="comment">-- ST_DWithin utilizes the GIST spatial index for millisecond performance</span>
+        ST_DWithin(
+            sp.location, 
+            ST_SetSRID(ST_MakePoint(user_lng, user_lat), 4326)::geography, 
+            radius_meters
+        )
+    <span class="storage">ORDER BY</span> 
+        distance_meters;
+<span class="storage">END</span>;
+<span class="string">$$</span>;</code></pre>
+                    </div>
+
+                    <!-- Supabase Stack Guide Tab -->
+                    <div class="tab-content" id="tab-stack">
+                        <div class="guide-text">
+                            <h3>Vite + React and Supabase Integration</h3>
+                            <p>To connect this architecture to a real React frontend, run the following steps:</p>
+                            <ol>
+                                <li>
+                                    <strong>Install dependencies:</strong>
+                                    <pre><code>npm install @supabase/supabase-js react-leaflet leaflet</code></pre>
+                                </li>
+                                <li>
+                                    <strong>Initialize client:</strong>
+                                    <pre><code>import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY);</code></pre>
+                                </li>
+                                <li>
+                                    <strong>Query matching React hook:</strong>
+                                    <pre><code>async function fetchNearbyProviders(lat, lng, radiusKm) {
+  const { data, error } = await supabase.rpc('get_providers_within_radius', {
+    user_lat: lat,
+    user_lng: lng,
+    radius_meters: radiusKm * 1000
+  });
+  if (error) console.error("Database query failed:", error);
+  return data;
+}</code></pre>
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <!-- Low-Cost Map Guide Tab -->
+                    <div class="tab-content" id="tab-cost">
+                        <div class="guide-text">
+                            <h3>Low-Cost & Open-Source Map Architectures</h3>
+                            <p>For budget-conscious apps, avoid Google Maps' high volume API charges ($7.00 CPM). Use these open stack patterns instead:</p>
+                            
+                            <table class="comparison-table">
+                                <thead>
+                                    <tr>
+                                        <th>Provider Stack</th>
+                                        <th>Approx. Cost</th>
+                                        <th>Features / Benefits</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Leaflet + CartoDB Tiles</strong> (Current Demo)</td>
+                                        <td><strong>$0.00 / Free</strong></td>
+                                        <td>Lightweight, simple raster map tiles, no API keys, standard look. Great for quick MVPs.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>MapLibre GL + MapTiler</strong></td>
+                                        <td><strong>Free Tier</strong> (100k views/mo, then $0.50/k)</td>
+                                        <td>GPU-accelerated vector mapping, tilt, custom styling. Elegant visual design.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Protomaps (Self-hosted PMTiles)</strong></td>
+                                        <td><strong>~$0.0001 per gigabyte</strong> (S3/Cloudflare costs)</td>
+                                        <td>Entire planet or city vector database stored in a single file on AWS S3/Cloudflare. Zero recurring provider fees.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+            
+    <!-- Custom Logic Script -->
+    <script src="app.js"></script>
+</body>
+</html>
